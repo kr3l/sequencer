@@ -4,9 +4,11 @@ const int dacPin = 25; // GPIO25 supports DAC on ESP32
 
 float rf = 5.6; // kOhm
 float r1 = 10.0; // kOhm
-float gain = 1.0 + rf / r1;
+// float gain = 1.0 + rf / r1;
 float dacOutMax = 3.3;
-float ampOutMax = dacOutMax * gain; // about 5V
+// float ampOutMax = dacOutMax * gain; // about 5V
+float ampOutMax = 5.0;
+float gain = ampOutMax / dacOutMax;
 
 struct Note {
   const char* name;
@@ -75,7 +77,7 @@ void playNote(const char* note, int durationMs) {
   delay(50);           // Short gap
 }
 
-void loop() {
+void loop2() {
   // Twinkle Twinkle Little Star
   playNote("C4", 500);
   playNote("C4", 500);
@@ -94,4 +96,9 @@ void loop() {
   playNote("C4", 1000);
 
   delay(2000); // Pause before looping
+}
+
+void loop() {
+  setAmpOutVoltage(5.0);
+  delay(2000);
 }
