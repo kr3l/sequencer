@@ -11,3 +11,5 @@ GPIO25 -> pin3 of opamp
 100nF between pin 1 and GND
 
 precision trimmer calibrated so the max outputted voltage on DAC results in exactly 5V
+
+![](./pinout_TL074.png)

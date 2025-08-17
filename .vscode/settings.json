@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "*.json5": "javascript",
+        "*.html.h": "html",
+        "cmath": "cpp"
+    }
+}
