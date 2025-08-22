@@ -51,7 +51,7 @@ void TrellisPad::setup(void) {
     trellis->activateKey(i, SEESAW_KEYPAD_EDGE_FALLING);
     trellis->registerCallback(i, staticButtonCallback);
     isPressed[i] = false;
-    isProgramming[i] = false;
+    isBlinking[i] = false;
     ledState[i] = false;
     color[i] = 0x000000;
   }
@@ -85,7 +85,7 @@ void TrellisPad::loop(void) {
 
     // Handle blinking for programming keys
     for (int i = 0; i < 16; i++) {
-        if (isProgramming[i] && (now - lastBlink[i] >= BLINK_INTERVAL)) {
+        if (isBlinking[i] && (now - lastBlink[i] >= BLINK_INTERVAL)) {
         ledState[i] = !ledState[i];
         lastBlink[i] = now;
         if (ledState[i]) {
@@ -95,6 +95,10 @@ void TrellisPad::loop(void) {
         }
         }
     }
+}
+
+void TrellisPad::setBlinking(int idx, bool _blinking) {
+  isBlinking[idx] = _blinking;
 }
 
 void TrellisPad::setShortPressCallback(Callback cb) {

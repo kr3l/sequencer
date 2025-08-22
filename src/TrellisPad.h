@@ -20,13 +20,14 @@ class TrellisPad {
         uint32_t Wheel(byte WheelPos);
         void setShortPressCallback(Callback cb);
         void setLongPressCallback(Callback cb);
+        void setBlinking(int idx, bool _blinking);
 
         // Store press start times for each button
         unsigned long pressStart[16];
         bool isPressed[16];
 
         // Programming (blinking) state
-        bool isProgramming[16];
+        bool isBlinking[16];
         unsigned long lastBlink[16];
         bool ledState[16];
         uint32_t color[16];

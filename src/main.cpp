@@ -2,13 +2,15 @@
 
 #include "NotePlayer.h"
 #include "TrellisPad.h"
+#include "Player.h"
 
-float programmedValues[16];
+bool isProgramming[16];
 
 const int potPin = 36; // GPIO36 = ADC1_CH0 on ESP32 D1 mini
 
 NotePlayer notePlayer = NotePlayer(25); // GPIO25 supports DAC on ESP32
 TrellisPad trellisPad = TrellisPad();
+Player player = Player(&trellisPad, &notePlayer);
 
 const char* melodyOdeToJoy[] = {
   "E4", "E4", "F4", "G4", "G4", "F4", "E4", "D4",
@@ -44,53 +46,23 @@ const int melodyFurEliseLength = sizeof(melodyFurElise) / sizeof(melodyFurElise[
 
 float analogPercent = 0.0f;
 bool isPotMode = true;
-int playSlotNumber = 0;
-bool isPlayMode = false;
-unsigned long playSlotStart = 0;
-bool startedSlotPlay = false;
-
-
 
 void onLongPress(int x, int y) {
   int idx = y * 4 + x;
-  if (trellisPad.isProgramming[idx]) {
+  if (player.steps[idx].isProgramming) {
     Serial.print("Stop Programming slot ");
   } else {
     Serial.print("Start Programming slot ");
   }
   Serial.println(idx);
   // Enter or leave programming mode (start blinking)
-  trellisPad.isProgramming[idx] = !trellisPad.isProgramming[idx];
+  player.steps[idx].isProgramming = !player.steps[idx].isProgramming;
+  trellisPad.setBlinking(idx, player.steps[idx].isProgramming);
   trellisPad.lastBlink[idx] = millis();
   trellisPad.ledState[idx] = false;  // start off
 }
 
-void stopPlaySlot(int idx) {
-  isPlayMode = false;
-  trellisPad.trellis->pixels.setPixelColor(playSlotNumber, 0x000000); // off
-  Serial.print("Stop play slot ");
-  Serial.println(playSlotNumber);
-  notePlayer.setDacOutVoltage(0.0);
-}
-
-void schedulePlaySlot(int idx) {
-  if (isPlayMode) {
-    stopPlaySlot(playSlotNumber);
-  }
-  isPlayMode = true;
-  playSlotNumber = idx;
-  playSlotStart = millis();
-  startedSlotPlay = false; // dac value not written yet
-  Serial.print("Play slot ");
-  Serial.println(idx);
-}
-
-void onShortPress(int x, int y) {
-  int idx = y * 4 + x;
-  Serial.print("Short press detected on button ");
-  Serial.println(idx);
-
-  if (trellisPad.isProgramming[idx]) {
+void savePotToStep(int idx) {
     // short press to confirm writing pot value to slot idx
     int raw = analogRead(potPin); // read raw ADC value
     // Map raw value (0–4095) to percentage
@@ -99,22 +71,28 @@ void onShortPress(int x, int y) {
     // autotune to nearest note
     dacOut = notePlayer.autotune(dacOut);
 
-    programmedValues[idx] = dacOut;
-    trellisPad.isProgramming[idx] = false;
+    player.steps[idx].programmedValue = dacOut;
+    player.steps[idx].isProgramming = false;
+    trellisPad.setBlinking(idx, false);
     Serial.print("Programmed slot ");
     Serial.println(idx);
-    if (!trellisPad.isProgramming[idx]) {
-      Serial.print("to value ");
-      Serial.println(dacOut);
-       trellisPad.trellis->pixels.setPixelColor(idx, 0x000000); // off
-    }
-  } else {
-    // short press to request play note of slox idx
-    schedulePlaySlot(idx);
-  }
+    Serial.print("to value ");
+    Serial.println(dacOut);
+    trellisPad.trellis->pixels.setPixelColor(idx, 0x000000); // off
 }
 
+void onShortPress(int x, int y) {
+  int idx = y * 4 + x;
+  Serial.print("Short press detected on button ");
+  Serial.println(idx);
 
+  if (player.steps[idx].isProgramming) {
+    savePotToStep(idx);
+  } else {
+    // short press to request play note of slox idx
+    player.playSlot(idx);
+  }
+}
 
 void setup() {
   Serial.begin(115200);
@@ -125,8 +103,9 @@ void setup() {
   trellisPad.setup();
   trellisPad.setShortPressCallback(onShortPress);
   trellisPad.setLongPressCallback(onLongPress);
-  for(int i=0; i<NEO_TRELLIS_NUM_KEYS; i++){
-    programmedValues[i] = 0.0f;
+  for(int i=0; i<16; i++){
+    player.steps[i].programmedValue = 0.0f;
+    player.steps[i].isProgramming = false;
   }
 }
 
@@ -138,7 +117,7 @@ void loop() {
 
   // Check for long presses
   for (int i = 0; i < 16; i++) {
-    if (trellisPad.isProgramming[i]) {
+    if (player.steps[i].isProgramming) {
       isPotMode = true;
     }
   }
@@ -157,30 +136,13 @@ void loop() {
     outColor = trellisPad.Wheel(out);
 
     for (int i = 0; i < 16; i++) {
-      if (trellisPad.isProgramming[i]) {
+      if (player.steps[i].isProgramming) {
         trellisPad.color[i] = outColor;
       }
     }
   }
 
-  if (isPlayMode) {
-    if (millis() - playSlotStart > SLOT_PLAY_DURATION) {
-      isPlayMode = false;
-      trellisPad.trellis->pixels.setPixelColor(playSlotNumber, 0x000000); // off
-      Serial.print("Stop play slot ");
-      Serial.println(playSlotNumber);
-      notePlayer.setDacOutVoltage(0.0);
-    }
-    if (!startedSlotPlay) {
-      float outValue = programmedValues[playSlotNumber];
-      notePlayer.setDacOutVoltage(outValue);
-      Serial.printf("Dac Out: %.1f%V\n", outValue);
-      startedSlotPlay = true;
-
-      byte out = (byte) round((outValue / notePlayer.dacOutMax) * 255.0);
-      trellisPad.trellis->pixels.setPixelColor(playSlotNumber, trellisPad.Wheel(out));
-    }
-  }
+  player.loop();
   trellisPad.trellis->pixels.show();
   delay(20);
   if (!Serial.available()) {
