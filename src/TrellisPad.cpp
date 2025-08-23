@@ -19,10 +19,12 @@ TrellisCallback TrellisPad::buttonCallback(keyEvent evt) {
     // button pressed
     pressStart[idx] = millis();
     isPressed[idx] = true;
+    longPressTriggered[idx] = false;
   //  trellis.pixels.setPixelColor(evt.bit.NUM, Wheel(map(evt.bit.NUM, 0, trellis.pixels.numPixels(), 0, 255))); //on rising
   } else if (evt.bit.EDGE == SEESAW_KEYPAD_EDGE_FALLING) {
   // or is the pad released?
     isPressed[idx] = false;
+    longPressTriggered[idx] = false;
   //  trellis.pixels.setPixelColor(evt.bit.NUM, 0); //off falling
 
     if (millis() - pressStart[idx] < LONG_PRESS_TIME / 2) {
@@ -75,24 +77,25 @@ void TrellisPad::loop(void) {
 
       // Check for long presses
     for (int i = 0; i < 16; i++) {
-        if (isPressed[i] && (now - pressStart[i] >= LONG_PRESS_TIME)) {
+        if (isPressed[i] && !longPressTriggered[i] && (now - pressStart[i] >= LONG_PRESS_TIME)) {
             int x = i % 4;
             int y = i / 4;
             onLongPress(x, y);
-            isPressed[i] = false;  // prevent repeated triggering
+            // prevent repeated triggering
+            longPressTriggered[i] = true;
         }
     }
 
     // Handle blinking for programming keys
     for (int i = 0; i < 16; i++) {
         if (isBlinking[i] && (now - lastBlink[i] >= BLINK_INTERVAL)) {
-        ledState[i] = !ledState[i];
-        lastBlink[i] = now;
-        if (ledState[i]) {
-            trellis->pixels.setPixelColor(i, color[i]); // red on
-        } else {
-            trellis->pixels.setPixelColor(i, 0x000000); // off
-        }
+          ledState[i] = !ledState[i];
+          lastBlink[i] = now;
+          if (ledState[i]) {
+              trellis->pixels.setPixelColor(i, color[i]); // red on
+          } else {
+              trellis->pixels.setPixelColor(i, 0x000000); // off
+          }
         }
     }
 }
@@ -140,6 +143,20 @@ uint32_t TrellisPad::Wheel(byte WheelPos) {
   } else {
    WheelPos -= 170;
    return trellis->pixels.Color(0, WheelPos * 3, 255 - WheelPos * 3);
+  }
+  return 0;
+}
+
+uint32_t TrellisPad::Wheel(byte WheelPos, byte brightness) {
+  float factor = ((float) brightness) / 255.0;
+  if(WheelPos < 85) {
+   return trellis->pixels.Color(factor * WheelPos * 3, factor * (255 - WheelPos * 3), 0);
+  } else if(WheelPos < 170) {
+   WheelPos -= 85;
+   return trellis->pixels.Color(factor * (255 - WheelPos * 3), 0, factor * (WheelPos * 3));
+  } else {
+   WheelPos -= 170;
+   return trellis->pixels.Color(0, factor * (WheelPos * 3), factor * (255 - WheelPos * 3));
   }
   return 0;
 }

@@ -4,10 +4,6 @@
 Player::Player(TrellisPad *_trellisPad, NotePlayer *_notePlayer, int _numberOfPlayableSteps) {
     trellisPad = _trellisPad;
     notePlayer = _notePlayer;
-    isPlaying = false;
-    playSlotNumber = 0;
-    playSlotStart = 0;
-    startedSlotPlay = false;
     isPlayingSequence = false;
     numberOfPlayableSteps = _numberOfPlayableSteps;
 
@@ -16,11 +12,23 @@ Player::Player(TrellisPad *_trellisPad, NotePlayer *_notePlayer, int _numberOfPl
         steps[i].isProgramming = false;
         steps[i].duty = 100;
         steps[i].gateOn = true;
+        // "now" properties relate to actual state (not programmed state)
+        steps[i].nowPlaying = false;
+        steps[i].nowPlayingSince = 0;
+        steps[i].nowGateHigh = false;
+        steps[i].writtenDac = false;
     }
 }
 
 void Player::stop(void) {
-    isPlaying = false;
+    int playSlotNumber = getPlayingStepNumber();
+    if (playSlotNumber < 0) {
+        return;
+    }
+    steps[playSlotNumber].nowPlaying = false;
+    steps[playSlotNumber].nowPlayingSince = 0;
+    steps[playSlotNumber].nowGateHigh = 0;
+    steps[playSlotNumber].writtenDac = false;
     trellisPad->trellis->pixels.setPixelColor(playSlotNumber, 0x000000); // off
     Serial.print("Stop play slot ");
     Serial.println(playSlotNumber);
@@ -28,23 +36,57 @@ void Player::stop(void) {
 }
 
 void Player::playSlot(int idx) {
-    if (isPlaying) {
-        stop();
-    }
-    isPlaying = true;
-    playSlotNumber = idx;
-    playSlotStart = millis();
-    startedSlotPlay = false; // dac value not written yet
+    stop();
+    steps[idx].nowPlaying = true;
+    steps[idx].nowPlayingSince = millis();
+    steps[idx].nowGateHigh = true;
+    steps[idx].writtenDac = false;
     Serial.print("Play slot ");
     Serial.println(idx);
 }
 
-void Player::loop(void) {
-    if (!isPlaying) {
+bool Player::isPlaying(void) {
+    for (int i=0; i<16; i+=1) {
+        if (steps[i].nowPlaying) {
+            return true;
+        }
+    }
+    return false;
+}
+
+int Player::getPlayingStepNumber(void) {
+    for (int i=0; i<16; i+=1) {
+        if (steps[i].nowPlaying) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+void Player::updateColorForStep(int idx) {
+    Step *step = &steps[idx];
+    if (!step->gateOn) {
+        trellisPad->trellis->pixels.setPixelColor(idx, 0x000000);
         return;
     }
-    if (millis() - playSlotStart > SLOT_PLAY_DURATION) {
-      int nextSlotNumber = (playSlotNumber + 1) % numberOfPlayableSteps;
+    byte out = (byte) round((step->programmedValue / notePlayer->dacOutMax) * 255.0);
+    uint32_t outColor = 0xFF0000;
+    if (step->nowPlaying) {
+        outColor = trellisPad->Wheel(out);
+    } else {
+        outColor = trellisPad->Wheel(out, 255 / 6);
+    }
+    trellisPad->trellis->pixels.setPixelColor(idx, outColor);
+}
+
+void Player::loop(void) {
+    int nowPlayingStepNumber = getPlayingStepNumber();
+    if (nowPlayingStepNumber < 0) {
+        return;
+    }
+    Step *step = &steps[nowPlayingStepNumber];
+    if ((millis() - step->nowPlayingSince) > SLOT_PLAY_DURATION) {
+      int nextSlotNumber = (nowPlayingStepNumber + 1) % numberOfPlayableSteps;
       stop();
       if (isPlayingSequence) {
         // advance to next slot
@@ -52,37 +94,34 @@ void Player::loop(void) {
         Serial.println(nextSlotNumber);
         playSlot(nextSlotNumber);
       }
+      return;
     }
     
-    if (startedSlotPlay) {
-        unsigned long gateHighDuration = (unsigned long)((float)SLOT_PLAY_DURATION * (float)steps[playSlotNumber].duty / 100.0);
-        if (millis() - playSlotStart > gateHighDuration) {
+    if (step->writtenDac) {
+        unsigned long gateHighDuration = (unsigned long)((float)SLOT_PLAY_DURATION * (float)steps[nowPlayingStepNumber].duty / 100.0);
+        if (step->nowGateHigh && (millis() - steps[nowPlayingStepNumber].nowPlayingSince) > gateHighDuration) {
             // lower the gate!
             // for now we don't have separate gate signal, we just clear dac
             notePlayer->setDacOutVoltage(0.0);
             Serial.println("lower gate");
+            step->nowGateHigh = false;
         }
 
         return;
     }
 
     // start slot play
-    float outValue = steps[playSlotNumber].programmedValue;
+    float outValue = step->programmedValue;
     // for now we don't have separate gate signal, so we clear the dac if gate off
-    if (steps[playSlotNumber].gateOn) {
+    if (step->gateOn) {
         Serial.print("play step ");
-        Serial.print(playSlotNumber);
-        Serial.print(" ");
-        Serial.print(outValue);
+        Serial.print(nowPlayingStepNumber);
         notePlayer->setDacOutVoltage(outValue);
     } else {
         Serial.print("play muted step ");
-        Serial.println(playSlotNumber);
+        Serial.println(nowPlayingStepNumber);
         notePlayer->setDacOutVoltage(0.0);
     }
+    step->writtenDac = true;
     Serial.printf("Dac Out: %.1f%V\n", outValue);
-    startedSlotPlay = true;
-
-    byte out = (byte) round((outValue / notePlayer->dacOutMax) * 255.0);
-    trellisPad->trellis->pixels.setPixelColor(playSlotNumber, trellisPad->Wheel(out));
 }

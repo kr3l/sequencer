@@ -26,10 +26,6 @@ EditMode currentMode = MODE_PITCH;
 int playButtonNumber = 12;
 int modeButtonNumber = 13;
 
-
-float analogPercent = 0.0f;
-bool isPotMode = true;
-
 void onLongPress(int x, int y) {
   int idx = y * 4 + x;
   if (player.steps[idx].isProgramming) {
@@ -120,6 +116,12 @@ void loop() {
 
   uint32_t outColor = 0xFF0000;
 
+  // each led outputs the color corresponding to programmed value with low brightness
+  // by default. This can be overwritten by following code, before pixels.show() is called.
+  for (int i = 0; i < player.numberOfPlayableSteps; i ++) {
+    player.updateColorForStep(i);
+  }
+
   // turning the pot while holding down a pad sets the pitch of that step
   if (currentMode == MODE_PITCH) {
     for (int i = 0; i < player.numberOfPlayableSteps; i++) {
@@ -140,7 +142,7 @@ void loop() {
       // also light led with color corresponding to dacOut
       byte out = (byte) round((dacOut / notePlayer.dacOutMax) * 255.0);
       outColor = trellisPad.Wheel(out);
-      trellisPad.color[i] = outColor;
+      trellisPad.trellis->pixels.setPixelColor(i, outColor);
 
       // only the first pressed pad is set
       break;
@@ -163,35 +165,10 @@ void loop() {
       // (note: blinking seems more common preview)
       byte out = (byte) round((duty / 100.0) * 255.0);
       outColor = trellisPad.Wheel(out);
-      trellisPad.color[i] = outColor;
+      trellisPad.trellis->pixels.setPixelColor(i, outColor);
 
       // only the first pressed pad is set
       break;
-    }
-  }
-
-  // Check for long presses
-  isPotMode = false;
-  for (int i = 0; i < 16; i++) {
-    if (player.steps[i].isProgramming) {
-      isPotMode = true;
-    }
-  }
-  if (isPotMode) {
-    int raw = analogRead(potPin); // read raw ADC value
-    // Map raw value (0–4095) to percentage
-    float dacOut =  (raw / 4095.0f) * notePlayer.dacOutMax;
-    dacOut = notePlayer.autotune(dacOut);
-    notePlayer.setDacOutVoltage(dacOut);
-    Serial.printf("Dac Out: %.1f%V\n", dacOut);
-
-    byte out = (byte) round((dacOut / notePlayer.dacOutMax) * 255.0);
-    outColor = trellisPad.Wheel(out);
-
-    for (int i = 0; i < 16; i++) {
-      if (player.steps[i].isProgramming) {
-        trellisPad.color[i] = outColor;
-      }
     }
   }
 
@@ -207,24 +184,17 @@ void loop() {
   if (input.equalsIgnoreCase("off")) {
     notePlayer.setAmpOutVoltage(0);
     Serial.println("Output off.");
-    isPotMode = false;
   } else if (input.equalsIgnoreCase("star")) {
     notePlayer.playMelody(melodyTwinkle, melodyTwinkleLength);
-    isPotMode = false;
   } else if (input.equalsIgnoreCase("ode")) {
     notePlayer.playMelody(melodyOdeToJoy, melodyOdeToJoyLength, 400);
-    isPotMode = false;
   } else if (input.equalsIgnoreCase("ateam")) {
     notePlayer.playMelody(melodyATeam, melodyATeamLength);
-    isPotMode = false;
   } else if (input.equalsIgnoreCase("elise")) {
     notePlayer.playMelody(melodyFurElise, melodyFurEliseLength);
-    isPotMode = false;
   } else if (input.equalsIgnoreCase("pot")) {
-    isPotMode = true;
   } else {
     notePlayer.setNoteVoltage(input);
-    isPotMode = false;
   }
 }
 

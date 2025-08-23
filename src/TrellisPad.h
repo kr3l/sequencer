@@ -18,6 +18,7 @@ class TrellisPad {
         void onLongPress(int x, int y);
         Adafruit_NeoTrellis *trellis;
         uint32_t Wheel(byte WheelPos);
+        uint32_t Wheel(byte WheelPos, byte brightness);
         void setShortPressCallback(Callback cb);
         void setLongPressCallback(Callback cb);
         void setBlinking(int idx, bool _blinking);
@@ -25,6 +26,7 @@ class TrellisPad {
         // Store press start times for each button
         unsigned long pressStart[16];
         bool isPressed[16];
+        bool longPressTriggered[16];
 
         // Programming (blinking) state
         bool isBlinking[16];
