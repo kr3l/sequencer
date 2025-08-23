@@ -5,7 +5,6 @@
 
 #define LONG_PRESS_TIME 1000
 #define BLINK_INTERVAL 200     // ms per blink
-#define SLOT_PLAY_DURATION 1000     // 1 second per slot play
 
 class TrellisPad {
     public:

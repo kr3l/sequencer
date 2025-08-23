@@ -18,7 +18,7 @@ struct Step {
 
 class Player {
     public:
-        Player(TrellisPad *_trellisPad, NotePlayer *_notePlayer, int _numberOfPlayableSteps);
+        Player(TrellisPad *_trellisPad, NotePlayer *_notePlayer, int _numberOfPlayableSteps, int _gatePin, int _triggerPin);
         void stop(void);
         void playSlot(int idx);
         void loop(void);
@@ -28,9 +28,12 @@ class Player {
         int getPlayingStepNumber(void);
         bool isPlaying(void);
         void updateColorForStep(int idx);
+        unsigned long stepDurationMs;
     private:
         TrellisPad *trellisPad;
         NotePlayer *notePlayer;
+        int gatePin;
+        int triggerPin;
 };
 
 #endif

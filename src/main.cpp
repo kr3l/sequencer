@@ -8,23 +8,29 @@
 bool isProgramming[16];
 
 const int potPin = 36; // GPIO36 = ADC1_CH0 on ESP32 D1 mini
+const int gatePin = 19;
+const int triggerPin = 18;
 
 NotePlayer notePlayer = NotePlayer(25); // GPIO25 supports DAC on ESP32
 TrellisPad trellisPad = TrellisPad();
-Player player = Player(&trellisPad, &notePlayer, 12);
+Player player = Player(&trellisPad, &notePlayer, 12, gatePin, triggerPin);
 
 enum EditMode {
     MODE_PITCH,
     MODE_DUTY,
+    MODE_VELOCITY,
     // (future: MODE_PROBABILITY, MODE_VELOCITY, etc.)
 };
-const u_int8_t NUM_MODES = 2;
+const u_int8_t NUM_MODES = 3;
 EditMode currentMode = MODE_PITCH;
 
 // the last row of pads on neotrellis are reserved for functions
 // and are not playable pads
 int playButtonNumber = 12;
 int modeButtonNumber = 13;
+
+unsigned long minSlotDurationMs = 50;
+unsigned long maxSlotDurationMs = 4000;
 
 void onLongPress(int x, int y) {
   int idx = y * 4 + x;
@@ -169,6 +175,15 @@ void loop() {
 
       // only the first pressed pad is set
       break;
+    }
+  }
+
+  if (currentMode == MODE_VELOCITY) {
+    int raw = analogRead(potPin); // read raw ADC value
+    float percent =  (raw / 4095.0f) * 100.0;
+    player.stepDurationMs = percent * (float)maxSlotDurationMs / 100.0;
+    if (player.stepDurationMs < minSlotDurationMs) {
+      player.stepDurationMs = minSlotDurationMs;
     }
   }
 

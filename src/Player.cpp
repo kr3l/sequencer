@@ -1,11 +1,16 @@
 #include "Arduino.h"
 #include "Player.h"
 
-Player::Player(TrellisPad *_trellisPad, NotePlayer *_notePlayer, int _numberOfPlayableSteps) {
+Player::Player(TrellisPad *_trellisPad, NotePlayer *_notePlayer, int _numberOfPlayableSteps, int _gatePin, int _triggerPin) {
     trellisPad = _trellisPad;
     notePlayer = _notePlayer;
     isPlayingSequence = false;
     numberOfPlayableSteps = _numberOfPlayableSteps;
+    stepDurationMs = 500;
+    gatePin = _gatePin;
+    triggerPin = _triggerPin;
+    pinMode(gatePin, OUTPUT); 
+    pinMode(triggerPin, OUTPUT); 
 
     for (int i=0; i<16; i+=1) {
         steps[i].programmedValue = 0.0f;
@@ -39,7 +44,11 @@ void Player::playSlot(int idx) {
     stop();
     steps[idx].nowPlaying = true;
     steps[idx].nowPlayingSince = millis();
-    steps[idx].nowGateHigh = true;
+    if (steps[idx].duty > 0) {
+        steps[idx].nowGateHigh = true;
+    } else {
+        steps[idx].nowGateHigh = false;
+    }
     steps[idx].writtenDac = false;
     Serial.print("Play slot ");
     Serial.println(idx);
@@ -85,7 +94,7 @@ void Player::loop(void) {
         return;
     }
     Step *step = &steps[nowPlayingStepNumber];
-    if ((millis() - step->nowPlayingSince) > SLOT_PLAY_DURATION) {
+    if ((millis() - step->nowPlayingSince) > stepDurationMs) {
       int nextSlotNumber = (nowPlayingStepNumber + 1) % numberOfPlayableSteps;
       stop();
       if (isPlayingSequence) {
@@ -93,16 +102,23 @@ void Player::loop(void) {
         Serial.print("move to step ");
         Serial.println(nextSlotNumber);
         playSlot(nextSlotNumber);
+      } else {
+         digitalWrite(gatePin, LOW);
       }
       return;
     }
     
     if (step->writtenDac) {
-        unsigned long gateHighDuration = (unsigned long)((float)SLOT_PLAY_DURATION * (float)steps[nowPlayingStepNumber].duty / 100.0);
+        unsigned long gateHighDuration = (unsigned long)((float)stepDurationMs * (float)steps[nowPlayingStepNumber].duty / 100.0);
+        // trigger goes low immediately
+        digitalWrite(triggerPin, LOW);
         if (step->nowGateHigh && (millis() - steps[nowPlayingStepNumber].nowPlayingSince) > gateHighDuration) {
             // lower the gate!
             // for now we don't have separate gate signal, we just clear dac
-            notePlayer->setDacOutVoltage(0.0);
+            notePlayer->setDacOutVoltage(0.0); // TODO remove this line
+
+            digitalWrite(gatePin, LOW);
+
             Serial.println("lower gate");
             step->nowGateHigh = false;
         }
@@ -117,11 +133,18 @@ void Player::loop(void) {
         Serial.print("play step ");
         Serial.print(nowPlayingStepNumber);
         notePlayer->setDacOutVoltage(outValue);
+        if (step->duty > 0) {
+            digitalWrite(gatePin, HIGH);
+            digitalWrite(triggerPin, HIGH);
+        }
     } else {
         Serial.print("play muted step ");
         Serial.println(nowPlayingStepNumber);
-        notePlayer->setDacOutVoltage(0.0);
+        notePlayer->setDacOutVoltage(0.0); // TODO remove this line
+        digitalWrite(gatePin, LOW);
+        digitalWrite(triggerPin, LOW);
     }
+    
     step->writtenDac = true;
     Serial.printf("Dac Out: %.1f%V\n", outValue);
 }
