@@ -11,8 +11,20 @@ const int potPin = 36; // GPIO36 = ADC1_CH0 on ESP32 D1 mini
 
 NotePlayer notePlayer = NotePlayer(25); // GPIO25 supports DAC on ESP32
 TrellisPad trellisPad = TrellisPad();
-Player player = Player(&trellisPad, &notePlayer);
+Player player = Player(&trellisPad, &notePlayer, 12);
 
+enum EditMode {
+    MODE_PITCH,
+    MODE_DUTY,
+    // (future: MODE_PROBABILITY, MODE_VELOCITY, etc.)
+};
+const u_int8_t NUM_MODES = 2;
+EditMode currentMode = MODE_PITCH;
+
+// the last row of pads on neotrellis are reserved for functions
+// and are not playable pads
+int playButtonNumber = 12;
+int modeButtonNumber = 13;
 
 
 float analogPercent = 0.0f;
@@ -57,11 +69,36 @@ void onShortPress(int x, int y) {
   Serial.print("Short press detected on button ");
   Serial.println(idx);
 
+  if (idx == modeButtonNumber) {
+    currentMode = (EditMode)((currentMode + 1) % NUM_MODES);
+    Serial.print("Set mode=");
+    Serial.println(currentMode);
+  }
+  if (idx == playButtonNumber) {
+    player.isPlayingSequence = !player.isPlayingSequence;
+    
+    if (player.isPlayingSequence) {
+      player.playSlot(0);
+      Serial.println("Play!");
+      trellisPad.trellis->pixels.setPixelColor(playButtonNumber, 0xff1493); // on
+    } else {
+      Serial.println("Stop!");
+      trellisPad.trellis->pixels.setPixelColor(playButtonNumber, 0x000000); // off
+    }
+  }
+
+  if (idx >= player.numberOfPlayableSteps) {
+    return;
+  }
+
   if (player.steps[idx].isProgramming) {
     savePotToStep(idx);
   } else {
+    // short press to turn gate on or off
+    player.steps[idx].gateOn = !player.steps[idx].gateOn;
+    // TODO: light led too, but dimmed
     // short press to request play note of slox idx
-    player.playSlot(idx);
+    //player.playSlot(idx);
   }
 }
 
@@ -73,28 +110,73 @@ void setup() {
 
   trellisPad.setup();
   trellisPad.setShortPressCallback(onShortPress);
-  trellisPad.setLongPressCallback(onLongPress);
-  for(int i=0; i<16; i++){
-    player.steps[i].programmedValue = 0.0f;
-    player.steps[i].isProgramming = false;
-  }
+  // trellisPad.setLongPressCallback(onLongPress);
 }
 
 void loop() {
   unsigned long now = millis();
 
-  isPotMode = false;
   trellisPad.loop();
 
+  uint32_t outColor = 0xFF0000;
+
+  // turning the pot while holding down a pad sets the pitch of that step
+  if (currentMode == MODE_PITCH) {
+    for (int i = 0; i < player.numberOfPlayableSteps; i++) {
+      if (!trellisPad.isPressed[i]) {
+        continue;
+      }
+      int raw = analogRead(potPin); // read raw ADC value
+      // Map raw value (0–4095) to dac out
+      float dacOut =  (raw / 4095.0f) * notePlayer.dacOutMax;
+      dacOut = notePlayer.autotune(dacOut);
+
+      // program value immediately
+      player.steps[i].programmedValue = dacOut;
+
+      // preview value by playing it out
+      notePlayer.setDacOutVoltage(dacOut);
+
+      // also light led with color corresponding to dacOut
+      byte out = (byte) round((dacOut / notePlayer.dacOutMax) * 255.0);
+      outColor = trellisPad.Wheel(out);
+      trellisPad.color[i] = outColor;
+
+      // only the first pressed pad is set
+      break;
+    }
+  }
+
+  if (currentMode == MODE_DUTY) {
+    for (int i = 0; i < player.numberOfPlayableSteps; i++) {
+      if (!trellisPad.isPressed[i]) {
+        continue;
+      }
+      int raw = analogRead(potPin); // read raw ADC value
+      // Map raw value (0–4095) to percentage 0..100
+      float duty =  (raw / 4095.0f) * 100.0;
+
+      // program value immediately
+      player.steps[i].duty = (uint8_t)duty;
+
+      // also light led with color corresponding to percentage
+      // (note: blinking seems more common preview)
+      byte out = (byte) round((duty / 100.0) * 255.0);
+      outColor = trellisPad.Wheel(out);
+      trellisPad.color[i] = outColor;
+
+      // only the first pressed pad is set
+      break;
+    }
+  }
+
   // Check for long presses
+  isPotMode = false;
   for (int i = 0; i < 16; i++) {
     if (player.steps[i].isProgramming) {
       isPotMode = true;
     }
   }
-
-  uint32_t outColor = 0xFF0000;
-
   if (isPotMode) {
     int raw = analogRead(potPin); // read raw ADC value
     // Map raw value (0–4095) to percentage
