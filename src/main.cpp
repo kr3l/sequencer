@@ -4,16 +4,26 @@
 #include "TrellisPad.h"
 #include "Player.h"
 #include "Melodies.h"
+#include <Encoder.h>
 
 bool isProgramming[16];
 
-const int potPin = 36; // GPIO36 = ADC1_CH0 on ESP32 D1 mini
+// TODO: gate B
+
 const int gatePin = 19;
 const int triggerPin = 18;
 
 NotePlayer notePlayer = NotePlayer(25); // GPIO25 supports DAC on ESP32
 TrellisPad trellisPad = TrellisPad();
 Player player = Player(&trellisPad, &notePlayer, 12, gatePin, triggerPin);
+
+Encoder knobLeft(32,33);
+const int knobLeftButtonPin = 27;
+long positionLeft = -999;
+
+Encoder knobRight(13,14);
+const int knobRightButtonPin = 23;
+long positionRight = -999;
 
 enum EditMode {
     MODE_PITCH,
@@ -49,9 +59,10 @@ void onLongPress(int x, int y) {
 
 void savePotToStep(int idx) {
     // short press to confirm writing pot value to slot idx
-    int raw = analogRead(potPin); // read raw ADC value
+    long raw = knobLeft.read();
+    long clampedRaw = constrain(raw, 0, 4096);
     // Map raw value (0–4095) to percentage
-    float dacOut =  (raw / 4095.0f) * notePlayer.dacOutMax;
+    float dacOut =  (clampedRaw / 4095.0f) * notePlayer.dacOutMax;
 
     // autotune to nearest note
     dacOut = notePlayer.autotune(dacOut);
@@ -110,6 +121,9 @@ void setup() {
   analogReadResolution(12); // 12-bit: 0–4095
   analogSetAttenuation(ADC_11db); // for input range up to ~3.3V
 
+  pinMode(knobLeftButtonPin, INPUT_PULLUP);
+  pinMode(knobRightButtonPin, INPUT_PULLUP);
+
   trellisPad.setup();
   trellisPad.setShortPressCallback(onShortPress);
   // trellisPad.setLongPressCallback(onLongPress);
@@ -134,9 +148,11 @@ void loop() {
       if (!trellisPad.isPressed[i]) {
         continue;
       }
-      int raw = analogRead(potPin); // read raw ADC value
+      long raw = knobLeft.read();
+      long clampedRaw = constrain(raw, 0, 4096);
+
       // Map raw value (0–4095) to dac out
-      float dacOut =  (raw / 4095.0f) * notePlayer.dacOutMax;
+      float dacOut =  (clampedRaw / 4095.0f) * notePlayer.dacOutMax;
       dacOut = notePlayer.autotune(dacOut);
 
       // program value immediately
@@ -160,9 +176,10 @@ void loop() {
       if (!trellisPad.isPressed[i]) {
         continue;
       }
-      int raw = analogRead(potPin); // read raw ADC value
+      long raw = knobLeft.read();
+      long clampedRaw = constrain(raw, 0, 4096);      
       // Map raw value (0–4095) to percentage 0..100
-      float duty =  (raw / 4095.0f) * 100.0;
+      float duty =  (clampedRaw / 4095.0f) * 100.0;
 
       // program value immediately
       player.steps[i].duty = (uint8_t)duty;
@@ -179,8 +196,9 @@ void loop() {
   }
 
   if (currentMode == MODE_VELOCITY) {
-    int raw = analogRead(potPin); // read raw ADC value
-    float percent =  (raw / 4095.0f) * 100.0;
+    long raw = knobLeft.read();
+    long clampedRaw = constrain(raw, 0, 4096);
+    float percent =  (clampedRaw / 4095.0f) * 100.0;
     player.stepDurationMs = percent * (float)maxSlotDurationMs / 100.0;
     if (player.stepDurationMs < minSlotDurationMs) {
       player.stepDurationMs = minSlotDurationMs;
