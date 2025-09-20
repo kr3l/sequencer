@@ -4,6 +4,5 @@
         "*.html.h": "html",
         "cmath": "cpp",
         "new": "cpp"
-    },
-    "idf.portWin": "COM5"
+    }
 }
