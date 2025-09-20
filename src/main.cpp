@@ -4,16 +4,20 @@
 #include "TrellisPad.h"
 #include "Player.h"
 #include "Melodies.h"
+#include <ESP32Encoder.h>
 
 bool isProgramming[16];
 
-const int potPin = 36; // GPIO36 = ADC1_CH0 on ESP32 D1 mini
+//const int potPin = 36; // GPIO36 = ADC1_CH0 on ESP32 D1 mini
 const int gatePin = 19;
 const int triggerPin = 18;
 
 NotePlayer notePlayer = NotePlayer(25); // GPIO25 supports DAC on ESP32
 TrellisPad trellisPad = TrellisPad();
 Player player = Player(&trellisPad, &notePlayer, 12, gatePin, triggerPin);
+
+ESP32Encoder knobLeft;
+ESP32Encoder knobRight;
 
 enum EditMode {
     MODE_PITCH,
@@ -32,6 +36,12 @@ int modeButtonNumber = 13;
 unsigned long minSlotDurationMs = 50;
 unsigned long maxSlotDurationMs = 4000;
 
+int getKnobLeftCount() {
+  int count = (int32_t)knobLeft.getCount();
+
+  return constrain(count, 0, 256);
+}
+
 void onLongPress(int x, int y) {
   int idx = y * 4 + x;
   if (player.steps[idx].isProgramming) {
@@ -49,9 +59,9 @@ void onLongPress(int x, int y) {
 
 void savePotToStep(int idx) {
     // short press to confirm writing pot value to slot idx
-    int raw = analogRead(potPin); // read raw ADC value
+    int raw = getKnobLeftCount(); // read raw ADC value
     // Map raw value (0–4095) to percentage
-    float dacOut =  (raw / 4095.0f) * notePlayer.dacOutMax;
+    float dacOut =  (raw / 255.0f) * notePlayer.dacOutMax;
 
     // autotune to nearest note
     dacOut = notePlayer.autotune(dacOut);
@@ -113,7 +123,21 @@ void setup() {
   trellisPad.setup();
   trellisPad.setShortPressCallback(onShortPress);
   // trellisPad.setLongPressCallback(onLongPress);
+
+  //ESP32Encoder::useInternalWeakPullResistors = puType::down;
+	// Enable the weak pull up resistors
+	ESP32Encoder::useInternalWeakPullResistors = puType::up;
+  knobLeft.attachHalfQuad(32, 33);
+  knobRight.attachHalfQuad(13, 14);
+
+  // clear the encoder's raw count and set the tracked count to zero
+	knobLeft.clearCount();
+  knobRight.clearCount();
+	Serial.println("knobLeft Start = " + String((int32_t)knobLeft.getCount()));
+  Serial.println("knobRight Start = " + String((int32_t)knobRight.getCount()));
 }
+
+
 
 void loop() {
   unsigned long now = millis();
@@ -134,9 +158,11 @@ void loop() {
       if (!trellisPad.isPressed[i]) {
         continue;
       }
-      int raw = analogRead(potPin); // read raw ADC value
-      // Map raw value (0–4095) to dac out
-      float dacOut =  (raw / 4095.0f) * notePlayer.dacOutMax;
+      int raw = getKnobLeftCount(); // read raw ADC value
+      Serial.print("knobLeft=");
+      Serial.println(raw);
+      // Map raw value (255) to dac out
+      float dacOut =  (raw / 255.0f) * notePlayer.dacOutMax;
       dacOut = notePlayer.autotune(dacOut);
 
       // program value immediately
@@ -160,9 +186,9 @@ void loop() {
       if (!trellisPad.isPressed[i]) {
         continue;
       }
-      int raw = analogRead(potPin); // read raw ADC value
+      int raw = getKnobLeftCount(); // read raw ADC value
       // Map raw value (0–4095) to percentage 0..100
-      float duty =  (raw / 4095.0f) * 100.0;
+      float duty =  (raw / 255.0f) * 100.0;
 
       // program value immediately
       player.steps[i].duty = (uint8_t)duty;
@@ -179,8 +205,8 @@ void loop() {
   }
 
   if (currentMode == MODE_VELOCITY) {
-    int raw = analogRead(potPin); // read raw ADC value
-    float percent =  (raw / 4095.0f) * 100.0;
+    int raw = getKnobLeftCount(); // read raw ADC value
+    float percent =  (raw / 255.0f) * 100.0;
     player.stepDurationMs = percent * (float)maxSlotDurationMs / 100.0;
     if (player.stepDurationMs < minSlotDurationMs) {
       player.stepDurationMs = minSlotDurationMs;
