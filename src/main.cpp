@@ -37,8 +37,12 @@ unsigned long minSlotDurationMs = 50;
 unsigned long maxSlotDurationMs = 4000;
 
 int getKnobLeftCount() {
-  int count = (int32_t)knobLeft.getCount();
+  int count = -(int32_t)knobLeft.getCount();
+  return constrain(count, 0, 256);
+}
 
+int getKnobRightCount() {
+  int count = -(int32_t)knobRight.getCount();
   return constrain(count, 0, 256);
 }
 
@@ -139,7 +143,7 @@ void setup() {
   Serial.println("knobRight Start = " + String((int32_t)knobRight.getCount()));
 }
 
-
+bool wasPressed[16] = {false};
 
 void loop() {
   unsigned long now = millis();
@@ -160,9 +164,16 @@ void loop() {
       if (!trellisPad.isPressed[i]) {
         continue;
       }
-      int raw = getKnobLeftCount(); // read raw ADC value
-      Serial.print("knobLeft=");
-      Serial.println(raw);
+
+      // this is the first loop iteration this button is pressed after being unpressed
+      // restore the count as stored in programmed value so we change from there
+      if (!wasPressed[i]) {  
+        float prevDac = player.steps[i].programmedValue;
+        int prevKnobLeftCount = -(int)(prevDac * 255.0f / notePlayer.dacOutMax);
+        knobLeft.setCount(prevKnobLeftCount);
+      }
+      int raw = getKnobLeftCount(); // read encoder
+
       // Map raw value (255) to dac out
       float dacOut =  ((float)raw / 255.0f) * notePlayer.dacOutMax;
       dacOut = notePlayer.autotune(dacOut);
@@ -213,6 +224,10 @@ void loop() {
     if (player.stepDurationMs < minSlotDurationMs) {
       player.stepDurationMs = minSlotDurationMs;
     }
+  }
+
+  for (int i = 0; i < player.numberOfPlayableSteps; i ++) {
+    wasPressed[i] = trellisPad.isPressed[i];
   }
 
   player.loop();
