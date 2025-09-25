@@ -61,7 +61,7 @@ void savePotToStep(int idx) {
     // short press to confirm writing pot value to slot idx
     int raw = getKnobLeftCount(); // read raw ADC value
     // Map raw value (0–4095) to percentage
-    float dacOut =  (raw / 255.0f) * notePlayer.dacOutMax;
+    float dacOut =  ((float)raw / 255.0f) * notePlayer.dacOutMax;
 
     // autotune to nearest note
     dacOut = notePlayer.autotune(dacOut);
@@ -164,7 +164,7 @@ void loop() {
       Serial.print("knobLeft=");
       Serial.println(raw);
       // Map raw value (255) to dac out
-      float dacOut =  (raw / 255.0f) * notePlayer.dacOutMax;
+      float dacOut =  ((float)raw / 255.0f) * notePlayer.dacOutMax;
       dacOut = notePlayer.autotune(dacOut);
 
       // program value immediately
@@ -190,7 +190,7 @@ void loop() {
       }
       int raw = getKnobLeftCount(); // read raw ADC value
       // Map raw value (0–4095) to percentage 0..100
-      float duty =  (raw / 255.0f) * 100.0;
+      float duty =  ((float)raw / 255.0f) * 100.0;
 
       // program value immediately
       player.steps[i].duty = (uint8_t)duty;
@@ -208,7 +208,7 @@ void loop() {
 
   if (currentMode == MODE_VELOCITY) {
     int raw = getKnobLeftCount(); // read raw ADC value
-    float percent =  (raw / 255.0f) * 100.0;
+    float percent =  ((float)raw / 255.0f) * 100.0;
     player.stepDurationMs = percent * (float)maxSlotDurationMs / 100.0;
     if (player.stepDurationMs < minSlotDurationMs) {
       player.stepDurationMs = minSlotDurationMs;
