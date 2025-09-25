@@ -129,6 +129,8 @@ void setup() {
 	ESP32Encoder::useInternalWeakPullResistors = puType::up;
   knobLeft.attachHalfQuad(32, 33);
   knobRight.attachHalfQuad(13, 14);
+  knobLeft.setFilter(1023);
+  knobRight.setFilter(1023);
 
   // clear the encoder's raw count and set the tracked count to zero
 	knobLeft.clearCount();
