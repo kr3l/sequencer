@@ -27,6 +27,7 @@ enum EditMode {
 };
 const u_int8_t NUM_MODES = 3;
 EditMode currentMode = MODE_PITCH;
+EditMode previousMode = MODE_PITCH;
 
 // the last row of pads on neotrellis are reserved for functions
 // and are not playable pads
@@ -199,6 +200,14 @@ void loop() {
       if (!trellisPad.isPressed[i]) {
         continue;
       }
+
+      // start from previous value
+      if (!wasPressed[i]) {  
+        uint8_t prev = player.steps[i].duty;
+        int prevKnobLeftCount = -(int)(prev * 255.0f / 100.0);
+        knobLeft.setCount(prevKnobLeftCount);
+      }
+
       int raw = getKnobLeftCount(); // read raw ADC value
       // Map raw value (0–4095) to percentage 0..100
       float duty =  ((float)raw / 255.0f) * 100.0;
@@ -218,14 +227,19 @@ void loop() {
   }
 
   if (currentMode == MODE_VELOCITY) {
+    if (previousMode != currentMode) {
+      unsigned long prev = player.stepDurationMs;
+      int prevKnobLeftCount = -(int)(prev * 255.0 / ((float)maxSlotDurationMs));
+      knobLeft.setCount(prevKnobLeftCount);
+    }
     int raw = getKnobLeftCount(); // read raw ADC value
-    float percent =  ((float)raw / 255.0f) * 100.0;
-    player.stepDurationMs = percent * (float)maxSlotDurationMs / 100.0;
+    player.stepDurationMs = (float)raw * (float)maxSlotDurationMs / 255.0f;
     if (player.stepDurationMs < minSlotDurationMs) {
       player.stepDurationMs = minSlotDurationMs;
     }
   }
 
+  previousMode = currentMode;
   for (int i = 0; i < player.numberOfPlayableSteps; i ++) {
     wasPressed[i] = trellisPad.isPressed[i];
   }
