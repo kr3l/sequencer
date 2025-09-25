@@ -1,10 +1,24 @@
 #include <Arduino.h>
-
+#include <Wire.h>
 #include "NotePlayer.h"
 #include "TrellisPad.h"
 #include "Player.h"
 #include "Melodies.h"
 #include <ESP32Encoder.h>
+
+// OLED libs
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+// OLED pins
+#define OLED_SDA SDA
+#define OLED_SCL SCL
+#define OLED_RST -1
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 32
+
+// Create an Adafruit_SSD1306 object called display.
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RST);
 
 bool isProgramming[16];
 
@@ -27,7 +41,7 @@ enum EditMode {
 };
 const u_int8_t NUM_MODES = 3;
 EditMode currentMode = MODE_PITCH;
-EditMode previousMode = MODE_PITCH;
+EditMode previousMode = MODE_DUTY; // just so we trigger a change initially
 
 // the last row of pads on neotrellis are reserved for functions
 // and are not playable pads
@@ -36,6 +50,24 @@ int modeButtonNumber = 13;
 
 unsigned long minSlotDurationMs = 50;
 unsigned long maxSlotDurationMs = 4000;
+
+void setupDisplay() {
+  // The parameters set as false ensure that the library doesn’t 
+  // use the default I2C pins and use the pins defined in the code (GPIO 4 and GPIO 15).
+  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3c, false, false)) {
+    // address 0x3C for 128x32
+    Serial.println(F("SSD1306 allocation failed"));
+    for(;;); // Don't proceed, loop forever
+  }
+  // flip 180deg
+  display.setRotation(2);
+  display.clearDisplay();
+  display.setTextColor(WHITE);
+  display.setTextSize(2);
+  display.setCursor(0,0);
+  display.print("SEQUENCER");
+  display.display();
+}
 
 int getKnobLeftCount() {
   int count = -(int32_t)knobLeft.getCount();
@@ -121,6 +153,17 @@ void onShortPress(int x, int y) {
 
 void setup() {
   Serial.begin(115200);
+
+  Serial.print("Using I2C at SDA=");
+  Serial.print(SDA);
+  Serial.print(", SCL=");
+  Serial.println(SCL);
+  Wire.begin(SDA, SCL);
+  Wire.setClock(100000);
+
+  setupDisplay();
+
+
   Serial.println("Send note name (e.g., C4, D#3), or 'off' to stop.");
   analogReadResolution(12); // 12-bit: 0–4095
   analogSetAttenuation(ADC_11db); // for input range up to ~3.3V
@@ -145,6 +188,19 @@ void setup() {
 }
 
 bool wasPressed[16] = {false};
+String line1 = "";
+String line2 = "";
+float previousDisplayedDacOut = 0.0;
+
+void printLines() {
+  display.clearDisplay();
+  display.setCursor(0,0);
+  display.println(line1);
+  display.setTextSize(1);
+  display.setCursor(0,20);
+  display.print(line2);
+  display.display();
+}
 
 void loop() {
   unsigned long now = millis();
@@ -157,6 +213,21 @@ void loop() {
   // by default. This can be overwritten by following code, before pixels.show() is called.
   for (int i = 0; i < player.numberOfPlayableSteps; i ++) {
     player.updateColorForStep(i);
+  }
+
+  if (currentMode != previousMode) {
+    display.clearDisplay();
+    display.setTextSize(2);
+    display.setCursor(0,0);
+    display.cp437(true);         // Use full 256 char 'Code Page 437' font
+    if (currentMode == MODE_PITCH) {
+      line1 = "PITCH";
+    } else if (currentMode == MODE_DUTY) {
+      line1 = "DUTY";
+    } else if (currentMode == MODE_VELOCITY) {
+      line1 = "VELOCITY";
+    }
+    printLines();
   }
 
   // turning the pot while holding down a pad sets the pitch of that step
@@ -189,6 +260,15 @@ void loop() {
       byte out = (byte) round((dacOut / notePlayer.dacOutMax) * 255.0);
       outColor = trellisPad.Wheel(out);
       trellisPad.trellis->pixels.setPixelColor(i, outColor);
+
+      // display value
+      if (dacOut != previousDisplayedDacOut) {
+        line2 = "";
+        line2 += notePlayer.voltageToNoteName(dacOut);
+        previousDisplayedDacOut = dacOut;
+        printLines();
+      }
+
 
       // only the first pressed pad is set
       break;

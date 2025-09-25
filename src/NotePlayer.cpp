@@ -66,6 +66,20 @@ float NotePlayer::setNoteVoltage(String noteName) {
   return 0.0;
 }
 
+const char* NotePlayer::voltageToNoteName(float dacVoltage) {
+  float requiredDacVoltage;
+  for (int i = 0; i < numNotes; i ++) {
+    float voltage = frequencyToVoltage(noteTable[i].frequency);
+    voltage = constrain(voltage, 0.0, ampOutMax);
+    requiredDacVoltage = voltage / gain;
+    // first voltage larger than requested voltage, this is the note
+    if (requiredDacVoltage > (dacVoltage - 0.01)) {
+      // first voltage larger than requested voltage, this is the note
+      return noteTable[i].name;
+    }
+  }
+  return "";
+}
 
 void NotePlayer::playNote(const char* note, int durationMs) {
   setNoteVoltage(note);
