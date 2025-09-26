@@ -6,7 +6,7 @@
 
 struct Step {
   bool isProgramming;
-  float programmedValue; // DAC out voltage 0-3.3V
+  float programmedValue; // in autotune mode the note number, otherwise the DAC out voltage 0-3.3V
   bool gateOn;      // true = gate enabled
   uint8_t duty;     // % of step length (0–100)
 

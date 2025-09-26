@@ -40,9 +40,9 @@ enum EditMode {
     MODE_PITCH,
     MODE_DUTY,
     MODE_VELOCITY,
-    // (future: MODE_PROBABILITY, MODE_VELOCITY, etc.)
+    MODE_STEPCOUNT,
 };
-const u_int8_t NUM_MODES = 3;
+const u_int8_t NUM_MODES = 4;
 EditMode currentMode = MODE_PITCH;
 EditMode previousMode = MODE_DUTY; // just so we trigger a change initially
 
@@ -167,6 +167,7 @@ void saveData() {
   size_t dutyBytesRead = prefs.getBytes("duty", dutyR, sizeof(dutyR));
 
   unsigned long stepDurationMsR = prefs.getULong("stepDurationMs", 0);
+  int stepCountR = prefs.getInt("stepCount", 12);
 
 
   float pitch[16] = {0};
@@ -209,6 +210,10 @@ void saveData() {
     prefs.putULong("stepDurationMs", player.stepDurationMs);
     Serial.println("Tempo saved");
   }
+  if (stepCountR != player.numberOfPlayableSteps) {
+    prefs.putInt("stepCount", player.numberOfPlayableSteps);
+    Serial.println("Step count saved");
+  }
   
   prefs.end();
 }
@@ -223,6 +228,7 @@ void loadData() {
   size_t gateOnBytesRead = prefs.getBytes("gateOn", gateOn, sizeof(gateOn));
   size_t dutyBytesRead = prefs.getBytes("duty", duty, sizeof(duty));
   unsigned long stepDurationMsR = prefs.getULong("stepDurationMs", player.stepDurationMs);
+  int stepCountR = prefs.getInt("stepCount", 12);
 
   if (
     (pitchBytesRead != sizeof(pitch))
@@ -240,6 +246,7 @@ void loadData() {
     player.steps[i].duty = duty[i];
   }
   player.stepDurationMs = stepDurationMsR;
+  player.numberOfPlayableSteps = stepCountR;
 
   prefs.end();
   Serial.println("Prefs loaded");
@@ -289,6 +296,7 @@ String line2 = "";
 int previousDisplayedNoteNum = -1;
 float previousDisplayedDuty = -1;
 unsigned long previousDisplayedTempo = 0;
+int previousDisplayedStepCount = -1;
 
 void printLines() {
   display.clearDisplay();
@@ -309,7 +317,7 @@ void loop() {
 
   // each led outputs the color corresponding to programmed value with low brightness
   // by default. This can be overwritten by following code, before pixels.show() is called.
-  for (int i = 0; i < player.numberOfPlayableSteps; i ++) {
+  for (int i = 0; i < 12; i ++) {
     player.updateColorForStep(i);
   }
 
@@ -324,6 +332,8 @@ void loop() {
       line1 = "DUTY";
     } else if (currentMode == MODE_VELOCITY) {
       line1 = "TEMPO";
+    } else if (currentMode == MODE_STEPCOUNT) {
+      line1 = "STEP COUNT";
     }
     printLines();
   }
@@ -467,8 +477,30 @@ void loop() {
     }
   }
 
+  if (currentMode == MODE_STEPCOUNT) {
+    if (previousMode != currentMode) {
+      int prev = player.numberOfPlayableSteps;
+      int prevKnobLeftCount = -prev;
+      knobLeft.setCount(prevKnobLeftCount);
+    }
+
+    int raw = getKnobLeftCount();
+    player.numberOfPlayableSteps = constrain(raw, 1, 12);
+
+    // display value
+    if (player.numberOfPlayableSteps != previousDisplayedStepCount) {
+      line2 = "";
+      line2 += player.numberOfPlayableSteps;
+      line2 += " steps";
+      previousDisplayedStepCount = player.numberOfPlayableSteps;
+      printLines();
+    }
+  }
+
   if (previousMode != currentMode) {
     saveData();
+    line2 = "";
+    printLines();
   }
 
   previousMode = currentMode;

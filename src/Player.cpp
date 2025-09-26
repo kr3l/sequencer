@@ -74,7 +74,7 @@ int Player::getPlayingStepNumber(void) {
 
 void Player::updateColorForStep(int idx) {
     Step *step = &steps[idx];
-    if (!step->gateOn) {
+    if (!step->gateOn || idx >= numberOfPlayableSteps) {
         trellisPad->trellis->pixels.setPixelColor(idx, 0x000000);
         return;
     }
@@ -138,7 +138,15 @@ void Player::loop(void) {
     if (step->gateOn) {
         Serial.print("play step ");
         Serial.print(nowPlayingStepNumber);
-        notePlayer->setDacOutVoltage(outValue);
+        if (notePlayer->autotuneActive) {
+            int noteNum = constrain((int)outValue, 0, NotePlayer::numNotes - 1);
+            float freqOut = NotePlayer::noteTable[noteNum].frequency;
+            float dacOut = notePlayer->frequencyToDacVoltage(freqOut);
+            notePlayer->setDacOutVoltage(dacOut);
+        } else {
+            notePlayer->setDacOutVoltage(outValue);
+        }
+        
         if (step->duty > 0) {
             digitalWrite(gatePin, HIGH);
             digitalWrite(triggerPin, HIGH);
