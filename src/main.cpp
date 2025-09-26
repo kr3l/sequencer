@@ -287,6 +287,8 @@ bool wasPressed[16] = {false};
 String line1 = "";
 String line2 = "";
 int previousDisplayedNoteNum = -1;
+float previousDisplayedDuty = -1;
+unsigned long previousDisplayedTempo = 0;
 
 void printLines() {
   display.clearDisplay();
@@ -422,6 +424,15 @@ void loop() {
       outColor = trellisPad.Wheel(out);
       trellisPad.trellis->pixels.setPixelColor(i, outColor);
 
+      // display value
+      if (duty != previousDisplayedDuty) {
+        line2 = "";
+        line2 += duty;
+        line2 += "%";
+        previousDisplayedDuty = duty;
+        printLines();
+      }
+
       // only the first pressed pad is set
       break;
     }
@@ -437,6 +448,22 @@ void loop() {
     player.stepDurationMs = (float)raw * (float)maxSlotDurationMs / 255.0f;
     if (player.stepDurationMs < minSlotDurationMs) {
       player.stepDurationMs = minSlotDurationMs;
+    }
+
+    // display value
+    if (player.stepDurationMs != previousDisplayedTempo) {
+      int bpm = 0;
+      if (player.stepDurationMs > 0) {
+        bpm  = (int)(60000.0 / player.stepDurationMs);
+      }
+      line2 = "";
+      line2 += player.stepDurationMs;
+      line2 += "ms/step";
+      line2 += "  ";
+      line2 += bpm;
+      line2 += "bpm";
+      previousDisplayedTempo = player.stepDurationMs;
+      printLines();
     }
   }
 
