@@ -5,6 +5,7 @@
 #include "Player.h"
 #include "Melodies.h"
 #include <ESP32Encoder.h>
+#include <Preferences.h>
 
 // OLED libs
 #include <Adafruit_GFX.h>
@@ -16,6 +17,8 @@
 #define OLED_RST -1
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 32
+
+Preferences prefs;
 
 // Create an Adafruit_SSD1306 object called display.
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RST);
@@ -151,6 +154,88 @@ void onShortPress(int x, int y) {
   }
 }
 
+
+void saveData() {
+  prefs.begin("storage", false);
+
+  // read first so we can check if anything really changed
+  float pitchR[16] = {0};
+  bool gateOnR[16] = {true};
+  uint8_t dutyR[16] = {100};
+  size_t pitchBytesRead = prefs.getBytes("pitch", pitchR, sizeof(pitchR));
+  size_t gateOnBytesRead = prefs.getBytes("gateOn", gateOnR, sizeof(gateOnR));
+  size_t dutyBytesRead = prefs.getBytes("duty", dutyR, sizeof(dutyR));
+
+  float pitch[16] = {0};
+  bool gateOn[16] = {true};
+  uint8_t duty[16] = {100};
+  bool pitchChanged = (pitchBytesRead != sizeof(pitchR));
+  bool gateOnChanged = (gateOnBytesRead != sizeof(gateOn));
+  bool dutyChanged = (dutyBytesRead != sizeof(dutyR));
+  for (int i = 0; i < 16; i += 1) {
+    pitch[i] = player.steps[i].programmedValue;
+    if (pitch[i] != pitchR[i]) {
+      pitchChanged = true;
+    }
+    gateOn[i] = player.steps[i].gateOn;
+    if (gateOn[i] != gateOnR[i]) {
+      gateOnChanged = true;
+    }
+    duty[i] = player.steps[i].duty;
+    if (duty[i] != dutyR[i]) {
+      dutyChanged = true;
+    }
+  }
+
+  // compare read version with what we want to write. Bail if exactly the same
+
+
+  if (pitchChanged) {
+    prefs.putBytes("pitch", pitch, sizeof(pitch));
+    Serial.println("Pitch saved");
+  }
+  if (gateOnChanged) {
+    prefs.putBytes("gateOn", gateOn, sizeof(gateOn));
+    Serial.println("GateOn saved");
+  }
+  if (dutyChanged) {
+    prefs.putBytes("duty", duty, sizeof(duty));
+    Serial.println("Duty saved");
+  }
+  
+  prefs.end();
+}
+
+void loadData() {
+  prefs.begin("storage", true);
+
+  float pitch[16] = {0};
+  bool gateOn[16] = {true};
+  uint8_t duty[16] = {100};
+  size_t pitchBytesRead = prefs.getBytes("pitch", pitch, sizeof(pitch));
+  size_t gateOnBytesRead = prefs.getBytes("gateOn", gateOn, sizeof(gateOn));
+  size_t dutyBytesRead = prefs.getBytes("duty", duty, sizeof(duty));
+
+  if (
+    (pitchBytesRead != sizeof(pitch))
+    || (gateOnBytesRead != sizeof(gateOn))
+    || (dutyBytesRead != sizeof(duty))
+  ) {
+    prefs.end();
+     Serial.println("No prefs found");
+    return;
+  }
+
+  for (int i = 0; i < 16; i += 1) {
+    player.steps[i].programmedValue = pitch[i];
+    player.steps[i].gateOn = gateOn[i];
+    player.steps[i].duty = duty[i];
+  }
+
+  prefs.end();
+  Serial.println("Prefs loaded");
+}
+
 void setup() {
   Serial.begin(115200);
 
@@ -185,6 +270,8 @@ void setup() {
   knobRight.clearCount();
 	Serial.println("knobLeft Start = " + String((int32_t)knobLeft.getCount()));
   Serial.println("knobRight Start = " + String((int32_t)knobRight.getCount()));
+
+  loadData();
 }
 
 bool wasPressed[16] = {false};
@@ -234,6 +321,12 @@ void loop() {
   if (currentMode == MODE_PITCH) {
     for (int i = 0; i < player.numberOfPlayableSteps; i++) {
       if (!trellisPad.isPressed[i]) {
+        if (wasPressed[i]) {
+          //TODO save the previously saved value to preferences
+          // 
+          Serial.println("save player.steps");
+          saveData();
+        }
         continue;
       }
 
