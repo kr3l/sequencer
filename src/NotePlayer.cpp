@@ -1,7 +1,7 @@
 #include "Arduino.h"
 #include "NotePlayer.h"
 
-Note noteTable[] = {
+const Note NotePlayer::noteTable[] = {
   {"C3", 130.81}, {"C#3", 138.59}, {"D3", 146.83}, {"D#3", 155.56},
   {"E3", 164.81}, {"F3", 174.61}, {"F#3", 185.00}, {"G3", 196.00},
   {"G#3", 207.65}, {"A3", 220.00}, {"A#3", 233.08}, {"B3", 246.94},
@@ -22,16 +22,22 @@ Note noteTable[] = {
   {"E7", 2637.02}, {"F7", 2793.83}, {"F#7", 2959.96}, {"G7", 3135.96},
   {"G#7", 3322.44}, {"A7", 3520.00}, {"A#7", 3729.31}, {"B7", 3951.07}
 };
-const int numNotes = sizeof(noteTable) / sizeof(Note);
+const int NotePlayer::numNotes = sizeof(NotePlayer::noteTable) / sizeof(Note);
 
 NotePlayer::NotePlayer(int _dacPin) {
     dacPin = _dacPin;
     gain = ampOutMax / dacOutMax;
+    autotuneActive = true;
 }
 
 float NotePlayer::frequencyToVoltage(float freq) {
   float f0 = noteTable[0].frequency;
   return log(freq / f0) / log(2); // log base 2
+}
+
+float NotePlayer::frequencyToDacVoltage(float freq) {
+  float voltage = frequencyToVoltage(freq);
+  return voltage / gain;
 }
 
 // Set raw DAC voltage (0–3.3V)
@@ -64,21 +70,6 @@ float NotePlayer::setNoteVoltage(String noteName) {
   }
   Serial.println("Note not found: " + noteName);
   return 0.0;
-}
-
-const char* NotePlayer::voltageToNoteName(float dacVoltage) {
-  float requiredDacVoltage;
-  for (int i = 0; i < numNotes; i ++) {
-    float voltage = frequencyToVoltage(noteTable[i].frequency);
-    voltage = constrain(voltage, 0.0, ampOutMax);
-    requiredDacVoltage = voltage / gain;
-    // first voltage larger than requested voltage, this is the note
-    if (requiredDacVoltage > (dacVoltage - 0.01)) {
-      // first voltage larger than requested voltage, this is the note
-      return noteTable[i].name;
-    }
-  }
-  return "";
 }
 
 void NotePlayer::playNote(const char* note, int durationMs) {

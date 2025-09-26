@@ -175,8 +175,8 @@ void setup() {
   //ESP32Encoder::useInternalWeakPullResistors = puType::down;
 	// Enable the weak pull up resistors
 	ESP32Encoder::useInternalWeakPullResistors = puType::up;
-  knobLeft.attachHalfQuad(32, 33);
-  knobRight.attachHalfQuad(13, 14);
+  knobLeft.attachSingleEdge(32, 33);
+  knobRight.attachSingleEdge(13, 14);
   knobLeft.setFilter(1023);
   knobRight.setFilter(1023);
 
@@ -190,7 +190,7 @@ void setup() {
 bool wasPressed[16] = {false};
 String line1 = "";
 String line2 = "";
-float previousDisplayedDacOut = 0.0;
+int previousDisplayedNoteNum = -1;
 
 void printLines() {
   display.clearDisplay();
@@ -240,18 +240,34 @@ void loop() {
       // this is the first loop iteration this button is pressed after being unpressed
       // restore the count as stored in programmed value so we change from there
       if (!wasPressed[i]) {  
-        float prevDac = player.steps[i].programmedValue;
-        int prevKnobLeftCount = -(int)(prevDac * 255.0f / notePlayer.dacOutMax);
-        knobLeft.setCount(prevKnobLeftCount);
+        if (notePlayer.autotuneActive) {
+          float prevNoteNum = player.steps[i].programmedValue;
+          int prevKnobLeftCount = -(int)(prevNoteNum);
+          knobLeft.setCount(prevKnobLeftCount);
+        } else {
+          float prevDac = player.steps[i].programmedValue;
+          int prevKnobLeftCount = -(int)(prevDac * 255.0f / notePlayer.dacOutMax);
+          knobLeft.setCount(prevKnobLeftCount);
+        }
       }
       int raw = getKnobLeftCount(); // read encoder
+      float dacOut;
+      int noteNum;
+      if (notePlayer.autotuneActive) {
+        noteNum = constrain(raw, 0, NotePlayer::numNotes - 1);
+        float freqOut = NotePlayer::noteTable[noteNum].frequency;
+        dacOut = notePlayer.frequencyToDacVoltage(freqOut);
+        
+        // program value immediately
+        player.steps[i].programmedValue = noteNum;
+      } else {
+        // Map raw value (255) to note number
+        dacOut =  ((float)raw / 255.0f) * notePlayer.dacOutMax;
+        // dacOut = notePlayer.autotune(dacOut);
 
-      // Map raw value (255) to dac out
-      float dacOut =  ((float)raw / 255.0f) * notePlayer.dacOutMax;
-      dacOut = notePlayer.autotune(dacOut);
-
-      // program value immediately
-      player.steps[i].programmedValue = dacOut;
+        // program value immediately
+        player.steps[i].programmedValue = dacOut;
+      }
 
       // preview value by playing it out
       notePlayer.setDacOutVoltage(dacOut);
@@ -262,10 +278,13 @@ void loop() {
       trellisPad.trellis->pixels.setPixelColor(i, outColor);
 
       // display value
-      if (dacOut != previousDisplayedDacOut) {
+      if (notePlayer.autotuneActive && (noteNum != previousDisplayedNoteNum)) {
         line2 = "";
-        line2 += notePlayer.voltageToNoteName(dacOut);
-        previousDisplayedDacOut = dacOut;
+        line2 += NotePlayer::noteTable[noteNum].name;
+        line2 += " / ";
+        line2 += dacOut;
+        line2 += "V";
+        previousDisplayedNoteNum = noteNum;
         printLines();
       }
 

@@ -78,7 +78,13 @@ void Player::updateColorForStep(int idx) {
         trellisPad->trellis->pixels.setPixelColor(idx, 0x000000);
         return;
     }
-    byte out = (byte) round((step->programmedValue / notePlayer->dacOutMax) * 255.0);
+    float dacOut = step->programmedValue;
+    if (notePlayer->autotuneActive) {
+        int noteNum = constrain(step->programmedValue, 0, NotePlayer::numNotes - 1);
+        float freqOut = NotePlayer::noteTable[noteNum].frequency;
+        dacOut = notePlayer->frequencyToDacVoltage(freqOut);
+    }
+    byte out = (byte) round((dacOut / notePlayer->dacOutMax) * 255.0);
     uint32_t outColor = 0xFF0000;
     if (step->nowPlaying) {
         outColor = trellisPad->Wheel(out);
