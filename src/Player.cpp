@@ -37,7 +37,7 @@ void Player::stop(void) {
     trellisPad->trellis->pixels.setPixelColor(playSlotNumber, 0x000000); // off
     Serial.print("Stop play slot ");
     Serial.println(playSlotNumber);
-    notePlayer->setDacOutVoltage(0.0);
+    //notePlayer->setDacOutVoltage(0.0);
 }
 
 void Player::playSlot(int idx) {
@@ -105,7 +105,7 @@ void Player::loop(void) {
       stop();
       if (isPlayingSequence) {
         // advance to next slot
-        Serial.print("move to step ");
+        //Serial.print("move to step ");
         Serial.println(nextSlotNumber);
         playSlot(nextSlotNumber);
       } else {
@@ -121,11 +121,11 @@ void Player::loop(void) {
         if (step->nowGateHigh && (millis() - steps[nowPlayingStepNumber].nowPlayingSince) > gateHighDuration) {
             // lower the gate!
             // for now we don't have separate gate signal, we just clear dac
-            notePlayer->setDacOutVoltage(0.0); // TODO remove this line
+            //notePlayer->setDacOutVoltage(0.0); // TODO remove this line
 
             digitalWrite(gatePin, LOW);
 
-            Serial.println("lower gate");
+            //Serial.println("lower gate");
             step->nowGateHigh = false;
         }
 
@@ -136,8 +136,8 @@ void Player::loop(void) {
     float outValue = step->programmedValue;
     // for now we don't have separate gate signal, so we clear the dac if gate off
     if (step->gateOn) {
-        Serial.print("play step ");
-        Serial.print(nowPlayingStepNumber);
+        //Serial.print("play step ");
+        //Serial.print(nowPlayingStepNumber);
         if (notePlayer->autotuneActive) {
             int noteNum = constrain((int)outValue, 0, NotePlayer::numNotes - 1);
             float freqOut = NotePlayer::noteTable[noteNum].frequency;
@@ -152,9 +152,9 @@ void Player::loop(void) {
             digitalWrite(triggerPin, HIGH);
         }
     } else {
-        Serial.print("play muted step ");
-        Serial.println(nowPlayingStepNumber);
-        notePlayer->setDacOutVoltage(0.0); // TODO remove this line
+        //Serial.print("play muted step ");
+        //Serial.println(nowPlayingStepNumber);
+        //notePlayer->setDacOutVoltage(0.0); // TODO remove this line
         digitalWrite(gatePin, LOW);
         digitalWrite(triggerPin, LOW);
     }
