@@ -166,6 +166,9 @@ void saveData() {
   size_t gateOnBytesRead = prefs.getBytes("gateOn", gateOnR, sizeof(gateOnR));
   size_t dutyBytesRead = prefs.getBytes("duty", dutyR, sizeof(dutyR));
 
+  unsigned long stepDurationMsR = prefs.getULong("stepDurationMs", 0);
+
+
   float pitch[16] = {0};
   bool gateOn[16] = {true};
   uint8_t duty[16] = {100};
@@ -202,6 +205,10 @@ void saveData() {
     prefs.putBytes("duty", duty, sizeof(duty));
     Serial.println("Duty saved");
   }
+  if (stepDurationMsR != player.stepDurationMs) {
+    prefs.putULong("stepDurationMs", player.stepDurationMs);
+    Serial.println("Tempo saved");
+  }
   
   prefs.end();
 }
@@ -215,6 +222,7 @@ void loadData() {
   size_t pitchBytesRead = prefs.getBytes("pitch", pitch, sizeof(pitch));
   size_t gateOnBytesRead = prefs.getBytes("gateOn", gateOn, sizeof(gateOn));
   size_t dutyBytesRead = prefs.getBytes("duty", duty, sizeof(duty));
+  unsigned long stepDurationMsR = prefs.getULong("stepDurationMs", player.stepDurationMs);
 
   if (
     (pitchBytesRead != sizeof(pitch))
@@ -231,6 +239,7 @@ void loadData() {
     player.steps[i].gateOn = gateOn[i];
     player.steps[i].duty = duty[i];
   }
+  player.stepDurationMs = stepDurationMsR;
 
   prefs.end();
   Serial.println("Prefs loaded");
@@ -312,7 +321,7 @@ void loop() {
     } else if (currentMode == MODE_DUTY) {
       line1 = "DUTY";
     } else if (currentMode == MODE_VELOCITY) {
-      line1 = "VELOCITY";
+      line1 = "TEMPO";
     }
     printLines();
   }
@@ -322,9 +331,6 @@ void loop() {
     for (int i = 0; i < player.numberOfPlayableSteps; i++) {
       if (!trellisPad.isPressed[i]) {
         if (wasPressed[i]) {
-          //TODO save the previously saved value to preferences
-          // 
-          Serial.println("save player.steps");
           saveData();
         }
         continue;
@@ -390,6 +396,9 @@ void loop() {
   if (currentMode == MODE_DUTY) {
     for (int i = 0; i < player.numberOfPlayableSteps; i++) {
       if (!trellisPad.isPressed[i]) {
+        if (wasPressed[i]) {
+          saveData();
+        }
         continue;
       }
 
@@ -429,6 +438,10 @@ void loop() {
     if (player.stepDurationMs < minSlotDurationMs) {
       player.stepDurationMs = minSlotDurationMs;
     }
+  }
+
+  if (previousMode != currentMode) {
+    saveData();
   }
 
   previousMode = currentMode;
